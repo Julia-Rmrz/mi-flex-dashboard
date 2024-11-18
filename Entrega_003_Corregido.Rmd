@@ -1,0 +1,161 @@
+
+---
+title: "Entrega 3 Julia y Fernanda"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# Cargar las librerías necesarias
+library(flexdashboard)
+library(readxl)
+library(tidyverse)
+library(modelsummary)
+library(plotly)
+library(readxl)
+Data <- read_excel("Data of.xlsx")
+View(Data)
+
+# Transformaciones necesarias en los datos
+Data <- Data %>%
+  mutate(
+    IING = as.numeric(IING),
+    PIB = as.numeric(gsub(",", ".", PIB)),
+    FLT = as.numeric(FLT),
+    EVN = as.numeric(EVN),
+    DT = as.numeric(DT),
+    PM = as.numeric(PM),
+    PT = as.numeric(PT)
+  )
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+library(ggplot2)
+ggplot(Data, aes(x = IING)) +
+  geom_density(fill = "blue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribución de la Densidad del Índice de Inequidad de Género (IING)",
+    x = "Índice de Inequidad de Género (IING)",
+    y = "Densidad"
+  )
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+# Calcular la matriz de correlación entre las variables
+correlacion <- cor(Data[, c("IING", "PIB", "FLT", "EVN", "DT", "PM", "PT")], use = "complete.obs")
+
+# Visualizar la matriz de correlación
+library(corrplot)
+corrplot::corrplot(correlacion, method = "circle")
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Modelos REGRESIONES
+
+```{r}
+# Crear regresiones bivariadas
+regresiones_bivariadas <- lapply(c("PIB", "FLT", "EVN", "DT", "PM", "PT"), function(var) {
+  formula <- as.formula(paste("IING ~", var))
+  lm(formula, data = Data)
+})
+
+# Generar tabla comparativa con kableExtra
+tabla_bivariadas <- modelsummary(
+  regresiones_bivariadas,
+  title = "Comparación de Regresiones Bivariadas",
+  stars = TRUE, 
+  output = "kableExtra"
+)
+
+tabla_bivariadas
+
+```
+
+```{r}
+# Crear regresión múltiple
+modelo_multiple <- lm(IING ~ PIB + FLT + EVN + DT + PM + PT, data = Data)
+
+# Crear lista de modelos para comparación
+regresiones <- c(regresiones_bivariadas, list("Modelo Múltiple" = modelo_multiple))
+
+# Generar tabla comparativa con kableExtra
+tabla_comparativa <- modelsummary(
+  regresiones,
+  title = "Comparación de Regresiones Gaussianas",
+  stars = TRUE, 
+  output = "kableExtra"
+)
+
+tabla_comparativa
+
+```
+
+-----------------------------------------------------------------------
+
+### Chart D CLUSTERIZACION
+```{r}
+dataClus <- Data %>% select(IING, PIB, FLT, EVN, DT, PM, PT) %>% na.omit()
+
+# Calcular WCSS
+wcss <- map_dbl(1:10, function(k) {
+  kmeans(dataClus, centers = k, nstart = 10)$tot.withinss
+})
+
+# Gráfico del método del codo
+tibble(k = 1:10, wcss = wcss) %>%
+  ggplot(aes(x = k, y = wcss)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Método del Codo",
+       x = "Número de Clústeres (k)",
+       y = "Suma de los Cuadrados Totales Dentro del Clúster (WCSS)") +
+  theme_minimal()
+
+```
+```{r}
+
+# Crear datos de clusterización
+dataClus <- Data %>% select(IING, PIB, FLT, EVN, DT, PM, PT) %>% na.omit()
+set.seed(123)  # Para reproducibilidad
+kmeans_result <- kmeans(dataClus, centers = 3, nstart = 10)
+
+# Agregar resultados de cluster y nombres de países al dataset
+Data$cluster <- factor(kmeans_result$cluster)
+Data$Pais <- as.character(Data$PAISES)  
+
+# Crear gráfico interactivo con plotly
+fig <- plot_ly(
+  data = Data,
+  x = ~PIB, 
+  y = ~IING, 
+  color = ~cluster, 
+  text = ~paste("País:", Pais, "<br>PIB:", PIB, "<br>IING:", IING),
+  hoverinfo = "text",
+  type = "scatter",
+  mode = "markers"
+) %>%
+  layout(
+    title = "Clusterización por K-means (Interactivo)",
+    xaxis = list(title = "PIB"),
+    yaxis = list(title = "Índice de Inequidad de Género (IING)")
+  )
+
+fig
+
+
+```
+
