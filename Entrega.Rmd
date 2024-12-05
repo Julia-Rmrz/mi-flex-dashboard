@@ -87,6 +87,7 @@ corMatrix=polycor::hetcor(TheData)$correlations
 ```{r}
 ggcorrplot(corMatrix)
 ```
+
 ## Column 3 {data-width=450}
 
 # Diagnóstico de regresiones  {data-navmenu="Exploración de la base"}
@@ -290,7 +291,6 @@ poorAGNES=silAGNES[silAGNES$sil_width<0,'country']%>%sort()
 poorAGNES
 ```
 
->asdfghjhgfdsa
 
 
 ## Column 3 {data-width=200}
@@ -338,7 +338,7 @@ poorDIANA=silDIANA[silDIANA$sil_width<0,'country']%>%sort()
 poorDIANA
 ```
 
->asdfghjhgfdsa
+
 
 
 ## Column 3 {data-width=200}
