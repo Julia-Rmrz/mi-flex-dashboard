@@ -1,0 +1,262 @@
+
+---
+title: "Entrega 3 Julia y Fernanda"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# Cargar las librerías necesarias
+library(flexdashboard)
+library(readxl)
+library(tidyverse)
+library(modelsummary)
+library(plotly)
+library(readxl)
+library(polycor)
+library(ggcorrplot)
+library(rio)
+Data <- import("https://github.com/Julia-Rmrz/base-datos-inequidad-de-genero/raw/refs/heads/main/Data%20of.xlsx")
+
+View(Data)
+
+# Transformaciones necesarias en los datos
+Data <- Data %>%
+  mutate(
+    IING = as.numeric(IING),
+    PIB = as.numeric(gsub(",", ".", PIB)),
+    FLT = as.numeric(FLT),
+    EVN = as.numeric(EVN),
+    DT = as.numeric(DT),
+    PM = as.numeric(PM),
+    PT = as.numeric(PT)
+  )
+# Convertir la variable FLT en porcentaje directamente
+Data$FLT <- (Data$FLT / Data$PT) * 100
+
+```
+
+
+# Exploración de la base 
+
+Column {data-width=500} {.tabset}
+-----------------------------------------------------------------------
+
+### Gráfico de densidad 
+
+```{r}
+library(ggplot2)
+ggplot(Data, aes(x = IING)) +
+  geom_density(fill = "blue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribución de la Densidad del Índice de Inequidad de Género (IING)",
+    x = "Índice de Inequidad de Género (IING)",
+    y = "Densidad"
+  )
+```
+
+> El gráfico muestra la distribución de densidad del Índice de Inequidad de Género (IING). La mayoría de los valores se concentran cerca de 0, indicando que la mayoría de los países tienen bajos niveles de inequidad de género. La densidad disminuye rápidamente a medida que el índice aumenta, aunque se observa una pequeña concentración de valores en torno a 0.6-0.7, lo que sugiere la existencia de un grupo reducido con mayores niveles de inequidad. Esto sugiere una tendencia general hacia menor inequidad
+
+### Matriz de correlaciones
+
+```{r}
+dontselect=c("PAISES","IING","PT")
+select=setdiff(names(Data),dontselect) 
+TheData=Data[,select]
+
+# usaremos:
+library(magrittr)
+head(TheData,10)%>%
+    rmarkdown::paged_table()
+```
+>Estos datos reflejan las condiciones de vida y oportunidades en cada país. Por ejemplo, Suiza destaca por su alta esperanza de vida (83.4 años) y bajo desempleo (4.1%), mientras que Bosnia y Herzegovina enfrenta desafíos con un desempleo del 12.6%. Estas variables permiten explorar cómo factores económicos y demográficos influyen en las disparidades de género, incluso cuando estas no están explícitas en las columnas seleccionadas.
+```{r}
+library(polycor)
+```
+```{r}
+corMatrix=polycor::hetcor(TheData)$correlations
+```
+
+```{r}
+ggcorrplot(corMatrix)
+```
+Column {data-width=200}
+```{r}
+# Crear un modelo con todas las variables independientes
+reg <- lm(PM ~ PIB + FLT + EVN + DT, data = TheData)
+plot(reg)
+```
+
+```{r}
+# Cargar la librería necesaria
+library(DescTools)
+
+# Calcular el VIF
+VIF_results <- VIF(reg)
+print(VIF_results)
+
+```
+>Todos los valores de VIF están por debajo de 5, lo que indica que no hay problemas de multicolinealidad significativa entre las variables independientes.
+
+```{r}
+library(psych)
+psych::KMO(corMatrix)
+```
+>Resultado es 0.49, lo que está por debajo del umbral mínimo de 0.6 para considerar los datos como aceptables para el análisis factorial. Esto indica una baja correlación parcial entre las variables, lo cual significa que no tienen suficiente relación para formar factores significativos.
+
+# Sacamos la variable PM 
+```{r}
+dontselect=c("PAISES","PM","PT")
+select=setdiff(names(Data),dontselect) 
+TheData=Data[,select]
+
+# usaremos:
+library(magrittr)
+head(TheData,10)%>%
+    rmarkdown::paged_table()
+```
+```{r}
+corMatrix2=polycor::hetcor(TheData)$correlations
+```
+
+```{r}
+reg2 <- lm(PIB ~  FLT + EVN + DT, data = TheData)
+plot(reg2)
+```
+
+
+
+```{r}
+# Calcular el VIF
+VIF_results2 <- VIF(reg2)
+print(VIF_results2)
+```
+
+```{r}
+psych::KMO(corMatrix2)
+```
+# Sacamos la variable DT 
+```{r}
+dontselect=c("PAISES","DT","PT")
+select=setdiff(names(Data),dontselect) 
+TheData=Data[,select]
+
+# usaremos:
+library(magrittr)
+head(TheData,10)%>%
+    rmarkdown::paged_table()
+```
+```{r}
+corMatrix3=polycor::hetcor(TheData)$correlations
+```
+```{r}
+reg3 <- lm(PIB ~  FLT + EVN + PM, data = TheData)
+plot(reg3)
+```
+```{r}
+# Calcular el VIF
+VIF_results3 <- VIF(reg3)
+print(VIF_results3)
+```
+```{r}
+psych::KMO(corMatrix3)
+```
+
+# Cluster
+```{r}
+dataClus=Data[,c(3,5:8)]
+row.names(dataClus)=Data$PAISES
+library(cluster)
+g.dist = daisy(dataClus, metric="gower")
+```
+
+Column {data-width=330}
+-----------------------------------------------------------------------
+
+
+### Gráfico de siluetas
+
+```{r}
+## para PAM
+
+library(factoextra)
+fviz_nbclust(dataClus, pam,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F)
+```
+
+Column {data-width=330}
+
+```{r}
+library(kableExtra)
+set.seed(123)
+res.pam=pam(g.dist,1,cluster.only = F)
+
+#nueva columna
+dataClus$pam=res.pam$cluster
+
+# ver
+
+head(dataClus,49)%>%kbl()%>%kable_styling()
+```
+
+```{r}
+silPAM=data.frame(res.pam$silinfo$widths)
+silPAM$country=row.names(silPAM)
+poorPAM=silPAM[silPAM$sil_width<0,'country']%>%sort()
+poorPAM
+```
+```{r}
+## PARA JERARQUICO
+
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "agnes")
+```
+```{r}
+set.seed(123)
+library(factoextra)
+
+res.agnes<- hcut(g.dist, k = 1,hc_func='agnes',hc_method = "ward.D")
+
+dataClus$agnes=res.agnes$cluster
+
+# ver
+
+head(dataClus,49)%>%kbl()%>%kable_styling()
+```
+```{r}
+# Visualize
+fviz_dend(res.agnes, cex = 0.7, horiz = T,main = "")
+```
+
+```{r}
+silAGNES=data.frame(res.agnes$silinfo$widths)
+silAGNES$country=row.names(silAGNES)
+poorAGNES=silAGNES[silAGNES$sil_width<0,'country']%>%sort()
+poorAGNES
+```
+```{r}
+#DIANA
+## PARA JERARQUICO
+
+fviz_nbclust(dataClus, hcut,diss=g.dist,method = "gap_stat",k.max = 10,verbose = F,hc_func = "diana")
+```
+```{r}
+set.seed(123)
+res.diana <- hcut(g.dist, k = 1,hc_func='diana')
+dataClus$diana=res.diana$cluster
+# veamos
+head(dataClus,49)%>%kbl%>%kable_styling()
+```
+```{r}
+# Visualize
+fviz_dend(res.diana, cex = 0.7, horiz = T, main = "")
+
+```{r}
+silDIANA=data.frame(res.diana$silinfo$widths)
+silDIANA$country=row.names(silDIANA)
+poorDIANA=silDIANA[silDIANA$sil_width<0,'country']%>%sort()
+poorDIANA
+```
+
+
+
